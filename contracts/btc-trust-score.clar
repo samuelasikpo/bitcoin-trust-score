@@ -279,3 +279,81 @@
     )
   )
 )
+
+;; Update identity active status
+(define-public (update-identity-status (active bool))
+  (let (
+      (sender tx-sender)
+      (current-identity (unwrap! (map-get? identities { owner: sender })
+        (err ERR-IDENTITY-NOT-FOUND)
+      ))
+    )
+    (begin
+      (map-set identities { owner: sender }
+        (merge current-identity {
+          active: active,
+          last-updated: stacks-block-height,
+        })
+      )
+      (ok true)
+    )
+  )
+)
+
+;; Reputation Management
+(define-public (update-reputation-score (action-type (string-ascii 50)))
+  (let (
+      (owner tx-sender)
+      (current-identity (unwrap! (map-get? identities { owner: owner })
+        (err ERR-IDENTITY-NOT-FOUND)
+      ))
+      (current-score (get reputation-score current-identity))
+      (action-multiplier (get-action-multiplier action-type))
+      (total-actions (+ (get total-actions current-identity) u1))
+    )
+    (begin
+      ;; Check contract is active
+      (asserts! (var-get contract-active) (err ERR-NOT-ACTIVE))
+      ;; Check identity is active
+      (asserts! (get active current-identity) (err ERR-UNAUTHORIZED))
+      ;; Validate action type exists and is active
+      (asserts!
+        (is-some (map-get? reputation-actions { action-type: action-type }))
+        (err ERR-INVALID-PARAMETERS)
+      )
+      (asserts! (is-action-active action-type) (err ERR-INVALID-PARAMETERS))
+      ;; Apply decay if needed
+      (if (should-decay (get last-decay current-identity))
+        (decay-reputation-internal owner)
+        true
+      )
+      ;; Get updated score after possible decay
+      (let (
+          (updated-identity (unwrap! (map-get? identities { owner: owner })
+            (err ERR-IDENTITY-NOT-FOUND)
+          ))
+          (updated-current-score (get reputation-score updated-identity))
+          (new-score (if (< (+ updated-current-score action-multiplier) MAX-REPUTATION-SCORE)
+            (+ updated-current-score action-multiplier)
+            MAX-REPUTATION-SCORE
+          ))
+        )
+        (begin
+          ;; Update identity record
+          (map-set identities { owner: owner }
+            (merge updated-identity {
+              reputation-score: new-score,
+              last-updated: stacks-block-height,
+              total-actions: total-actions,
+            })
+          )
+          ;; Log the reputation change
+          (log-reputation-change owner action-type updated-current-score
+            new-score
+          )
+          (ok new-score)
+        )
+      )
+    )
+  )
+)
