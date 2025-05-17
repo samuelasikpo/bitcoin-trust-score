@@ -423,3 +423,62 @@
     )
   )
 )
+
+;; Reputation Verification Functions
+(define-read-only (get-reputation (owner principal))
+  (let ((identity (get-identity-field owner)))
+    (if (is-some identity)
+      (some (get reputation-score (unwrap! identity none)))
+      none
+    )
+  )
+)
+
+(define-read-only (get-full-identity (owner principal))
+  (get-identity-field owner)
+)
+
+(define-read-only (verify-reputation
+    (owner principal)
+    (min-reputation-threshold uint)
+  )
+  (match (map-get? identities { owner: owner })
+    identity (if (and
+        (get active identity)
+        (>= (get reputation-score identity) min-reputation-threshold)
+      )
+      (some true)
+      none
+    )
+    none
+  )
+)
+
+(define-read-only (get-reputation-action (action-type (string-ascii 50)))
+  (map-get? reputation-actions { action-type: action-type })
+)
+
+(define-read-only (get-reputation-history
+    (owner principal)
+    (tx-id uint)
+  )
+  (map-get? reputation-history {
+    owner: owner,
+    tx-id: tx-id,
+  })
+)
+
+(define-read-only (get-contract-parameters)
+  {
+    max-reputation: MAX-REPUTATION-SCORE,
+    min-reputation: MIN-REPUTATION-SCORE,
+    starting-reputation: (var-get starting-reputation),
+    decay-rate: (var-get decay-rate),
+    decay-period: (var-get decay-period),
+    owner: (var-get contract-owner),
+    active: (var-get contract-active),
+  }
+)
+
+;; Initialize the contract if not initialized
+(initialize-reputation-actions)
