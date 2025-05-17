@@ -357,3 +357,69 @@
     )
   )
 )
+
+;; Decay Reputation Over Time (internal function)
+(define-private (decay-reputation-internal (owner principal))
+  (let (
+      (current-identity (default-to {
+        did: "",
+        reputation-score: u0,
+        created-at: u0,
+        last-updated: u0,
+        last-decay: u0,
+        total-actions: u0,
+        active: false,
+      }
+        (map-get? identities { owner: owner })
+      ))
+      (current-score (get reputation-score current-identity))
+      (decay-amount (/ (* current-score (var-get decay-rate)) u100))
+      (updated-score (if (> current-score decay-amount)
+        (- current-score decay-amount)
+        MIN-REPUTATION-SCORE
+      ))
+    )
+    (begin
+      (map-set identities { owner: owner }
+        (merge current-identity {
+          reputation-score: updated-score,
+          last-updated: stacks-block-height,
+          last-decay: stacks-block-height,
+        })
+      )
+      ;; Log the reputation change
+      (log-reputation-change owner "decay" current-score updated-score)
+      true
+    )
+  )
+)
+
+;; Public decay function
+(define-public (decay-reputation)
+  (let (
+      (owner tx-sender)
+      (current-identity (unwrap! (map-get? identities { owner: owner })
+        (err ERR-IDENTITY-NOT-FOUND)
+      ))
+    )
+    (begin
+      ;; Check contract is active
+      (asserts! (var-get contract-active) (err ERR-NOT-ACTIVE))
+      ;; Check identity is active
+      (asserts! (get active current-identity) (err ERR-UNAUTHORIZED))
+      ;; Validate decay period has passed
+      (asserts! (should-decay (get last-decay current-identity))
+        (err ERR-INVALID-PARAMETERS)
+      )
+      (decay-reputation-internal owner)
+      (let (
+          (updated-identity (unwrap! (map-get? identities { owner: owner })
+            (err ERR-IDENTITY-NOT-FOUND)
+          ))
+          (updated-score (get reputation-score updated-identity))
+        )
+        (ok updated-score)
+      )
+    )
+  )
+)
