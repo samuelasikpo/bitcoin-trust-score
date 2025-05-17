@@ -139,3 +139,68 @@
     (ok true)
   )
 )
+
+;; Update an existing reputation action
+(define-public (update-reputation-action
+    (action-type (string-ascii 50))
+    (multiplier uint)
+    (description (string-ascii 100))
+    (active bool)
+  )
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err ERR-NOT-ADMIN))
+    (asserts!
+      (is-some (map-get? reputation-actions { action-type: action-type }))
+      (err ERR-ACTION-NOT-FOUND)
+    )
+    (map-set reputation-actions { action-type: action-type } {
+      multiplier: multiplier,
+      description: description,
+      active: active,
+    })
+    (ok true)
+  )
+)
+
+;; Initialize default reputation actions
+(define-public (initialize-reputation-actions)
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err ERR-NOT-ADMIN))
+    (map-set reputation-actions { action-type: "governance-vote" } {
+      multiplier: u5,
+      description: "Participation in governance voting",
+      active: true,
+    })
+    (map-set reputation-actions { action-type: "contract-fulfillment" } {
+      multiplier: u10,
+      description: "Successful completion of a smart contract agreement",
+      active: true,
+    })
+    (map-set reputation-actions { action-type: "community-contribution" } {
+      multiplier: u7,
+      description: "Contribution to community projects or initiatives",
+      active: true,
+    })
+    (map-set reputation-actions { action-type: "validation" } {
+      multiplier: u3,
+      description: "Validation of network transactions or data",
+      active: true,
+    })
+    (map-set reputation-actions { action-type: "content-creation" } {
+      multiplier: u6,
+      description: "Creation of valuable content on the platform",
+      active: true,
+    })
+    (ok true)
+  )
+)
+
+;; Helper Functions
+
+;; Validate that an owner exists and is the sender
+(define-private (is-valid-owner (owner principal))
+  (and
+    (is-some (map-get? identities { owner: owner }))
+    (is-eq owner tx-sender)
+  )
+)
