@@ -204,3 +204,78 @@
     (is-eq owner tx-sender)
   )
 )
+
+;; Log a reputation change event
+(define-private (log-reputation-change
+    (owner principal)
+    (action-type (string-ascii 50))
+    (previous-score uint)
+    (new-score uint)
+  )
+  (map-set reputation-history {
+    owner: owner,
+    tx-id: stacks-block-height,
+  } {
+    action-type: action-type,
+    previous-score: previous-score,
+    new-score: new-score,
+    timestamp: burn-block-height,
+    block-height: stacks-block-height,
+  })
+)
+
+;; Get multiplier for a specific action type
+(define-private (get-action-multiplier (action-type (string-ascii 50)))
+  (default-to u0
+    (get multiplier (map-get? reputation-actions { action-type: action-type }))
+  )
+)
+
+;; Check if an action type is active
+(define-private (is-action-active (action-type (string-ascii 50)))
+  (default-to false
+    (get active (map-get? reputation-actions { action-type: action-type }))
+  )
+)
+
+;; Get identity data for a principal
+(define-private (get-identity-field (owner principal))
+  (map-get? identities { owner: owner })
+)
+
+;; Check if reputation should be decayed
+(define-private (should-decay (last-decay uint))
+  (>= (- stacks-block-height last-decay) (var-get decay-period))
+)
+
+;; Identity Management
+
+;; Create a new decentralized identity
+(define-public (create-identity (did (string-ascii 50)))
+  (let (
+      (sender tx-sender)
+      (current-block-height stacks-block-height)
+    )
+    (begin
+      ;; Check contract is active
+      (asserts! (var-get contract-active) (err ERR-NOT-ACTIVE))
+      ;; Check if identity already exists
+      (asserts! (is-none (map-get? identities { owner: sender }))
+        (err ERR-IDENTITY-EXISTS)
+      )
+      ;; Validate DID
+      (asserts! (> (len did) MINIMUM_DID_LENGTH) (err ERR-INVALID-PARAMETERS))
+      ;; Create identity
+      (map-set identities { owner: sender } {
+        did: did,
+        reputation-score: (var-get starting-reputation),
+        created-at: current-block-height,
+        last-updated: current-block-height,
+        last-decay: current-block-height,
+        total-actions: u0,
+        active: true,
+      })
+      (ok did)
+    )
+  )
+)
