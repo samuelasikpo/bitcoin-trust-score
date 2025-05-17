@@ -71,3 +71,71 @@
     block-height: uint,
   }
 )
+
+;; Administrative Functions
+
+;; Set a new contract owner
+(define-public (set-contract-owner (new-owner principal))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err ERR-NOT-ADMIN))
+    (var-set contract-owner new-owner)
+    (ok true)
+  )
+)
+
+;; Set contract active state
+(define-public (set-contract-active (active bool))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err ERR-NOT-ADMIN))
+    (var-set contract-active active)
+    (ok true)
+  )
+)
+
+;; Set reputation decay parameters
+(define-public (set-decay-parameters
+    (new-rate uint)
+    (new-period uint)
+  )
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err ERR-NOT-ADMIN))
+    (asserts! (<= new-rate u100) (err ERR-INVALID-PARAMETERS))
+    (asserts! (> new-period u0) (err ERR-INVALID-PARAMETERS))
+    (var-set decay-rate new-rate)
+    (var-set decay-period new-period)
+    (ok true)
+  )
+)
+
+;; Set default starting reputation for new identities
+(define-public (set-starting-reputation (new-value uint))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err ERR-NOT-ADMIN))
+    (asserts! (<= new-value MAX-REPUTATION-SCORE) (err ERR-INVALID-PARAMETERS))
+    (var-set starting-reputation new-value)
+    (ok true)
+  )
+)
+
+;; Reputation Action Management
+
+;; Add a new reputation action type
+(define-public (add-reputation-action
+    (action-type (string-ascii 50))
+    (multiplier uint)
+    (description (string-ascii 100))
+  )
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err ERR-NOT-ADMIN))
+    (asserts!
+      (is-none (map-get? reputation-actions { action-type: action-type }))
+      (err ERR-ACTION-EXISTS)
+    )
+    (map-set reputation-actions { action-type: action-type } {
+      multiplier: multiplier,
+      description: description,
+      active: true,
+    })
+    (ok true)
+  )
+)
